@@ -1,0 +1,8 @@
+services:
+  propiedades-svc:
+    build: .
+    image: duoc/jv0101-caso11-propiedades:1.0.0
+    container_name: caso11-propiedades-svc
+    ports:
+      - "${PORT:-8080}:8080"
+    restart: unless-stopped
