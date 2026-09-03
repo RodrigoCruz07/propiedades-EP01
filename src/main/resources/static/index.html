@@ -54,27 +54,29 @@
   <h2>Responsabilidad del servicio (SRP)</h2>
   <p>Propiedades es el microservicio responsable de administra los datos y la lógica del dominio de Propiedades del caso caso11 (InmoNube). dentro del caso caso11 (InmoNube). Sus datos se persisten en una base de datos H2  (una por microservicio) y queda aislado del resto de la solución para garantizar bajo acoplamiento y alta cohesión.</p>
 
-  <h2>Endpoints</h2>
-  <table>
-    <thead><tr><th>Método</th><th>Ruta</th><th>Descripción</th></tr></thead>
-    <tbody>
-      <tr><td>GET</td><td>/api/propiedads</td><td>Lista todos los recursos</td></tr>
-      <tr><td>GET</td><td>/api/propiedads/{id}</td><td>Obtiene un recurso por id</td></tr>
-      <tr><td>POST</td><td>/api/propiedads</td><td>Crea un recurso</td></tr>
-      <tr><td>PUT</td><td>/api/propiedads/{id}</td><td>Actualiza un recurso</td></tr>
-      <tr><td>DELETE</td><td>/api/propiedads/{id}</td><td>Elimina un recurso</td></tr>
-    </tbody>
-  </table>
+    <h2>Endpoints</h2>
+    <table>
+      <thead><tr><th>Método</th><th>Ruta</th><th>Descripción</th></tr></thead>
+      <tbody>
+        <tr><td>GET</td><td>/api/propiedads</td><td>Lista todos los recursos</td></tr>
+        <tr><td>GET</td><td>/api/propiedads/{id}</td><td>Obtiene un recurso por id</td></tr>
+        <tr><td>POST</td><td>/api/propiedads</td><td>Crea un recurso</td></tr>
+        <tr><td>PUT</td><td>/api/propiedads/{id}</td><td>Actualiza un recurso</td></tr>
+        <tr><td>DELETE</td><td>/api/propiedads/{id}</td><td>Elimina un recurso</td></tr>
+      </tbody>
+    </table>
 
-  <h2>Ejemplo rápido</h2>
-<pre>curl -X POST http://localhost:8080/api/propiedads \
-  -H "Content-Type: application/json" \
-  -d '{"nombre":"Crear recurso"}'
-curl http://localhost:8080/api/propiedads</pre>
+    <h2>Ejemplo rápido</h2>
+  <pre>curl -X POST http://localhost:8080/api/propiedads \
+    -H "Content-Type: application/json" \
+    -d '{"nombre":"Crear recurso"}'
+  curl http://localhost:8080/api/propiedads</pre>
 
-  <h2>Tecnologías</h2>
-  <p>Spring Boot 3.3 · Java 21 · Maven · Spring Data JPA · H2 · Bean Validation · springdoc-openapi (Swagger UI + ReDoc) · JaCoCo (cobertura 100% LINE) · Cucumber (BDD vs endpoints) · Docker / Docker Compose.</p>
-</main>
-<footer>Generado para la Evaluación Parcial N°1 · JVY0101 Java: Diseño y Construcción de Soluciones Nativas en Nube · caso caso11 — InmoNube.</footer>
-</body>
-</html>
+    <h2>Tecnologías</h2>
+    <p>Spring Boot 3.3 · Java 21 · Maven · Spring Data JPA · H2 · Bean Validation · springdoc-openapi (Swagger UI + ReDoc) · JaCoCo (cobertura 100% LINE) · Cucumber (BDD vs endpoints) · Docker / Docker Compose.</p>
+  </main>
+  <footer>Generado para la Evaluación Parcial N°1 · JVY0101 Java: Diseño y Construcción de Soluciones Nativas en Nube · caso caso11 — InmoNube.
+    <strong>Versión 1.0.0</strong>
+  </footer>
+  </body>
+  </html>
