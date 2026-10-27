@@ -183,7 +183,7 @@ Además: crear el *Environment* `production` (Settings → Environments), y en `
 
 ## Uso de Inteligencia Artificial
 
-Se ocupo la IA para ayudar a armar el pipeline y para los errores que se produjeran en el proceso 
+Se ocupo la IA para ayudar a armar el pipeline y para los errores que se produjeran en el proceso y tambien se ocupo la IA para ayudar a armar la segunda parte de este README asi como el flujo de que pasa en el pipeline y el ccomo se instalo en la ec2, las variables que se tiene en github y mas
 
 ## Conclusiones y reflexiones individuales
 
