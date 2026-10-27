@@ -1,8 +1,64 @@
+# Orquestacion: aplicacion + base de datos MySQL.
+#  - Local:      docker compose up --build   (usa build: . y valores por defecto)
+#  - Produccion: el pipeline define IMAGE (ghcr.io/...:<sha>) y DB_PASSWORD en un .env en la EC2
 services:
+  db:
+    image: mysql:8.4
+    container_name: propiedades-db
+    environment:
+      MYSQL_DATABASE: propiedades
+      MYSQL_USER: propiedades
+      MYSQL_PASSWORD: ${DB_PASSWORD:-propiedades_local}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-${DB_PASSWORD:-propiedades_local}}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u propiedades -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
   propiedades-svc:
     build: .
-    image: duoc/jv0101-caso11-propiedades:1.0.0
-    container_name: caso11-propiedades-svc
+    image: ${IMAGE:-duoc/jv0101-caso11-propiedades:local}
+    container_name: propiedades-svc
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://db:3306/propiedades
+      DB_USER: propiedades
+      DB_PASSWORD: ${DB_PASSWORD:-propiedades_local}
+      PORT: "8080"
     ports:
-      - "${PORT:-8080}:8080"
+      - "${HOST_PORT:-8080}:8080"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+
+networks:
+  backend:
+
+volumes:
+  db-data:

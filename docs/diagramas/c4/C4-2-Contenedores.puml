@@ -8,7 +8,7 @@ LAYOUT_WITH_LEGEND()
 Person(actor, "Arrendador", "Publica propiedades y cobra arriendos")
 System_Boundary(sb, "ms-propiedades (dominio de Propiedades)") {
   Container(api, "API de Propiedades", "Spring Boot 3 · Java 21 · ECS Fargate", "Expone /api/propiedads y persiste el dominio con su propia base de datos")
-  ContainerDb(db, "BD del catálogo", "Aurora Serverless (PostgreSQL)", "Propiedads del dominio (propia del servicio)")
+  ContainerDb(db, "BD del catálogo", "Aurora Serverless (MySQL)", "Propiedads del dominio (propia del servicio)")
   Container(cache, "Caché de lecturas", "Amazon ElastiCache (Redis)", "Respuestas frecuentes (Cache-Aside)")
 }
 

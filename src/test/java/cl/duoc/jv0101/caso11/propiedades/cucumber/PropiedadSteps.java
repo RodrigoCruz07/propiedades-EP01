@@ -28,6 +28,7 @@ public class PropiedadSteps {
     private Long id;
     private ResponseEntity<Propiedad> respuesta;
     private ResponseEntity<Void> respuestaVoid;
+    private ResponseEntity<Propiedad[]> respuestaListado;
 
     private String url() {
         return "http://localhost:" + port + "/api/propiedads";
@@ -47,13 +48,13 @@ public class PropiedadSteps {
 
     @When("consulto el listado de {string}")
     public void consultarListado(String recurso) {
-        ResponseEntity<Propiedad[]> listado = rest.getForEntity(url(), Propiedad[].class);
-        assertThat(listado.getStatusCode()).isEqualTo(HttpStatus.OK);
+        respuestaListado = rest.getForEntity(url(), Propiedad[].class);
     }
 
     @Then("el listado responde con código {int}")
     public void listadoCodigo(int codigo) {
-        assertThat(codigo).isEqualTo(200);
+        assertThat(respuestaListado.getStatusCode().value()).isEqualTo(codigo);
+        assertThat(respuestaListado.getBody()).isNotNull();
     }
 
     @Given("un nuevo {string} con nombre {string}")

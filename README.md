@@ -1,13 +1,14 @@
 # Propiedades — Microservicio de riesgo propiedades
 
-Microservicio correspondiente al **caso caso11 — InmoNube** (Plataforma inmobiliaria) de la Evaluación Parcial N°1.
+Microservicio del **caso caso11 — InmoNube** (Plataforma inmobiliaria). Evaluación Parcial N°1 (microservicio) y **Evaluación Parcial N°2 (pipeline CI/CD, contenedores y despliegue en AWS EC2)**.
 
 | | |
 |---|---|
-| Asignatura | JVY0101 — Java: Diseño y Construcción de Soluciones Nativas en Nube |
+| Asignaturas | JVY0101 — Java: Soluciones Nativas en Nube (EP1) · DOY0101 — Ingeniería DevOps (EP2) |
 | Stack | Spring Boot 3.3 · Java 21 · Maven · Spring Data JPA · H2 · springdoc-openapi |
 | Calidad | JaCoCo cobertura LINE 100% · Cucumber (BDD) alineado a endpoints REST |
-| Entrega | Docker / Docker Compose |
+| CI/CD | GitHub Actions · SonarCloud · Trivy · Dependabot · GHCR |
+| Despliegue | Docker Compose (app + MySQL) en AWS EC2 |
 
 ## Responsabilidad (SRP)
 
@@ -53,9 +54,11 @@ mvn spring-boot:run
 ## Cómo ejecutar con Docker
 
 ```bash
-docker compose up --build
-# http://localhost:8080
+docker compose up --build        # app + MySQL
+# http://localhost:8080/actuator/health
 ```
+
+> El compose usa el perfil `prod` (MySQL): Swagger UI y ReDoc están disponibles (se pueden apagar con `SWAGGER_ENABLED=false`), pero la **consola H2 solo existe en modo local** (`mvn spring-boot:run`), porque en producción la base es MySQL.
 
 ## Cómo ejecutar las pruebas
 
@@ -99,3 +102,89 @@ Features y hotfix siempre entran por pull request, nunca push directo a main o d
 Podemos ver en la imagen los Pull Request y los Merge que se hicieron respectivamente a cada rama y que como bien se dijo anteriormente hay una rama llamada develop en la que se hicieron los PR y que si surge un imprevisto se hace de la misma manera de un PR y se revisa y se hace Merge a la rama main
 ## Estrategia de revisión
 La estrategia de revision de nuestro repositorio fue de que uno se encargaba de hacer un feature o hotfix o lo que corresponda y le hacia PR a la rama Develop pero este no pasaba altiro a merge sino que se mantenia en espera para ser revisado y poder hacer los test correspondientes de que estaba en funcionamiento y si no habia ningun error se le hacia el merge correspondiente 
+## Conclusiones 
+Me gusto la parte de poder saber los tipos de commit o ramas  ya que los desconocia y que se ocupan una descripcion corta y lo otro ya lo conocia mas o menos el hacer los cambios y el disparador del workflow aunque este ultimo me dio un poco de problemas en el ultimo paso para hacer un PR en main pero lo pude arreglar debido a que tenia el workflow en develop y no en main.
+---
+
+# Pipeline CI/CD (Evaluación Parcial 2)
+
+Archivo: [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml)
+
+```mermaid
+flowchart LR
+  A[push / PR] --> B[build-test<br/>mvn verify + JaCoCo + Cucumber]
+  B --> C[SonarCloud<br/>Quality Gate]
+  C --> D[docker<br/>build imagen]
+  D --> E[Trivy<br/>escaneo CRITICAL]
+  E --> F[Push a GHCR<br/>tag = SHA del commit]
+  F --> G[deploy en EC2<br/>solo main]
+  G --> H[health check<br/>/actuator/health]
+```
+
+| Etapa | Qué hace | Se ejecuta en | Bloquea si falla |
+|---|---|---|---|
+| `build-test` | `mvn verify`: pruebas unitarias (JUnit/Mockito), BDD (Cucumber) y cobertura JaCoCo (mínimo 100% de líneas) | PR y push a `develop`/`main` | Sí |
+| SonarCloud | Análisis estático + Quality Gate (`sonar.qualitygate.wait=true`) | PR y push | Sí |
+| `docker` | Construye la imagen (multi-stage, usuario no root, HEALTHCHECK) | PR y push | Sí |
+| Trivy | Escanea la imagen; falla con vulnerabilidades CRITICAL con corrección disponible | PR y push | Sí |
+| Publicación | Sube la imagen a GHCR (`:<sha>` y `:latest`) | push a `develop`/`main` | — |
+| `deploy` | Copia `docker-compose.yml` a la EC2, `docker compose pull` + `up -d` | solo push a `main` (entorno `production`) | — |
+| Health check | Consulta `/actuator/health` en la EC2 hasta ver `UP` | después del deploy | Sí |
+
+Además, **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)) revisa semanalmente dependencias Maven, imagen base Docker y acciones de GitHub, y abre PR hacia `develop`.
+
+## Trazabilidad (desarrollo → producción)
+
+- Cada cambio entra por **Pull Request** (GitFlow: `feature/*` → `develop` → `main`), y el workflow queda ligado al commit y al PR.
+- La imagen se etiqueta con el **SHA del commit** y contiene las etiquetas OCI `org.opencontainers.image.revision` y `.source`: desde la imagen en ejecución se puede llegar al commit exacto y a la ejecución del pipeline.
+- La EC2 ejecuta siempre `ghcr.io/<repo>:<sha>`; el `.env` del servidor registra la imagen desplegada.
+- El historial de *Actions* + el entorno `production` de GitHub muestran quién y cuándo desplegó cada versión.
+
+## Calidad y seguridad
+
+- **Calidad:** cobertura JaCoCo con umbral (`mvn verify` falla si baja), Quality Gate de SonarCloud, reportes de pruebas y cobertura publicados como artefactos del pipeline.
+- **Seguridad:** Dependabot (dependencias), Trivy (imagen), SonarCloud (código), contenedor sin root, secretos solo en *GitHub Secrets* (nunca en el repositorio), `permissions:` mínimos en el workflow, perfil `prod` sin consola H2 ni `show-sql` (Swagger configurable con `SWAGGER_ENABLED`).
+- **Escalabilidad / recursos:** límites de CPU y memoria por contenedor en `docker-compose.yml`, `MaxRAMPercentage` en la JVM, `restart: unless-stopped`, healthchecks y `depends_on: service_healthy`.
+
+## Orquestación
+
+`docker-compose.yml` define dos servicios (`propiedades-svc` y `db` MySQL), red interna `backend`, volumen persistente `db-data`, healthchecks y límites de recursos. La base de datos **no** se expone al exterior; solo el puerto 8080 de la aplicación.
+
+## Secretos y configuración requerida
+
+En *Settings → Secrets and variables → Actions* del repositorio:
+
+| Secreto | Descripción |
+|---|---|
+| `SONAR_TOKEN` | Token de SonarCloud |
+| `EC2_HOST` | IP pública (idealmente Elastic IP) de la EC2 |
+| `EC2_USER` | Usuario SSH (`ec2-user` en Amazon Linux, `ubuntu` en Ubuntu) |
+| `EC2_SSH_KEY` | Contenido completo de la llave privada `.pem` |
+| `DB_PASSWORD` | Clave de MySQL en producción |
+
+Además: crear el *Environment* `production` (Settings → Environments), y en `pom.xml` reemplazar `sonar.organization` y `sonar.projectKey` por los valores de SonarCloud.
+
+## Preparar la EC2 (una sola vez)
+
+1. Lanzar una instancia (Amazon Linux 2023 o Ubuntu) y asignarle una **Elastic IP**.
+2. Security Group: SSH (22) y TCP 8080 de entrada.
+3. Instalar Docker y el plugin Compose:
+   ```bash
+   # Amazon Linux 2023
+   sudo dnf install -y docker && sudo systemctl enable --now docker
+   sudo usermod -aG docker ec2-user
+   sudo mkdir -p /usr/local/lib/docker/cli-plugins
+   sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose
+   sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+   ```
+4. Cerrar sesión y volver a entrar para aplicar el grupo `docker`.
+5. Hacer push a `main`: el pipeline despliega solo.
+
+## Uso de Inteligencia Artificial
+
+_Completar (obligatorio): indicar qué herramientas de IA se usaron y cómo (por ejemplo, apoyo para estructurar el workflow y la documentación), citándolas. Las conclusiones y reflexiones individuales se escriben sin IA._
+
+## Conclusiones y reflexiones individuales
+
+_Cada integrante escribe aquí su reflexión personal, sin apoyo de IA._

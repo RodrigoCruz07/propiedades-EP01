@@ -45,3 +45,15 @@ H2 en memoria (se pierde al detener el contenedor), configurable en `src/main/re
 | Variable | Defecto | Descripción |
 |----------|---------|-------------|
 | `PORT` | `8080` | Puerto del servidor y mapeo del contenedor |
+
+---
+
+## Despliegue en AWS EC2 (EP2)
+
+Ver la sección *Pipeline CI/CD* del [README](../README.md): el push a `main` ejecuta pruebas, Sonar, build/scan de la imagen, publicación en GHCR y despliegue por SSH con `docker compose` en la EC2, verificando `/actuator/health`.
+
+| Variable | Defecto | Descripción |
+|----------|---------|-------------|
+| `IMAGE` | `duoc/jv0101-caso11-propiedades:local` | Imagen a ejecutar (el pipeline la fija al SHA del commit) |
+| `DB_PASSWORD` | `propiedades_local` | Clave de MySQL (en producción viene de GitHub Secrets) |
+| `HOST_PORT` | `8080` | Puerto publicado en el host |
