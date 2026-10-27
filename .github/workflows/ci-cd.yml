@@ -50,16 +50,22 @@ jobs:
             target/site/jacoco/
             target/cucumber/
             target/surefire-reports/
-
-      # Los PR de forks no tienen acceso a secretos: se omite Sonar en ese caso
-      - name: Análisis SonarCloud (falla si no pasa el Quality Gate)
-        if: github.event.pull_request.head.repo.fork != true
+            
+      # Plan gratuito: solo main permite consultar el Quality Gate.
+      - name: Análisis Sonar en main (bloquea si falla el Quality Gate)
+        if: github.ref == 'refs/heads/main'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
-          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
+
+      - name: Análisis Sonar en develop / PR (sin esperar el Quality Gate)
+        if: github.ref != 'refs/heads/main' && github.event.pull_request.head.repo.fork != true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
 
   # ---------------------------------------------------------------
   # 2) Imagen Docker + escaneo de vulnerabilidades + publicación (GHCR)
