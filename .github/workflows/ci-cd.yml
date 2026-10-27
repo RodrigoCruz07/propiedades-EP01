@@ -113,7 +113,9 @@ jobs:
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/.trivyignore:/.trivyignore:ro" \
             aquasec/trivy:latest image \
+            --ignorefile /.trivyignore \
             --severity CRITICAL --ignore-unfixed --exit-code 1 \
             "${{ steps.vars.outputs.image }}"
 

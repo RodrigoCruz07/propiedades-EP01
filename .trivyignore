@@ -1,0 +1,4 @@
+# Riesgo aceptado: CVE-2026-47884 (spring-webmvc, XsltView).
+# El servicio solo expone una API REST JSON y no usa vistas XSLT.
+# La corrección exige Spring Framework 7 / Spring Boot 4 (mejora futura).
+CVE-2026-47884
