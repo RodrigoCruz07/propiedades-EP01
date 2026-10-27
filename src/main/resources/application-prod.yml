@@ -1,0 +1,28 @@
+# Perfil de produccion (SPRING_PROFILES_ACTIVE=prod). Credenciales solo por variables de entorno.
+spring:
+  datasource:
+    url: ${DB_URL}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+  h2:
+    console:
+      enabled: false
+
+# Swagger visible por defecto (necesario para la demo); desactivar con SWAGGER_ENABLED=false
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

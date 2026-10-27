@@ -1,0 +1,202 @@
+name: CI/CD Propiedades
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+# Permisos minimos para el GITHUB_TOKEN
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------
+  # 1) Compilacion + pruebas unitarias/BDD + cobertura + SonarCloud
+  # ---------------------------------------------------------------
+  build-test:
+    name: Pruebas y análisis de calidad
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Sonar necesita el historial completo
+
+      - name: Configurar Java 21 (con caché de Maven)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Pruebas unitarias + Cucumber + umbral JaCoCo
+        run: mvn -B verify
+
+      - name: Publicar reportes de pruebas y cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-pruebas
+          path: |
+            target/site/jacoco/
+            target/cucumber/
+            target/surefire-reports/
+            
+      # Plan gratuito: solo main permite consultar el Quality Gate.
+      - name: Análisis Sonar en main (bloquea si falla el Quality Gate)
+        if: github.ref == 'refs/heads/main'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >
+          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=300
+
+      - name: Análisis Sonar en develop / PR (sin esperar el Quality Gate)
+        if: github.ref != 'refs/heads/main' && github.event.pull_request.head.repo.fork != true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
+
+  # ---------------------------------------------------------------
+  # 2) Imagen Docker + escaneo de vulnerabilidades + publicación (GHCR)
+  # ---------------------------------------------------------------
+  docker:
+    name: Imagen Docker
+    needs: build-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Definir nombre y etiqueta de la imagen (trazabilidad por commit)
+        id: vars
+        run: |
+          IMAGE="${IMAGE_NAME,,}"          # GHCR exige minúsculas
+          echo "image=${IMAGE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "latest=${IMAGE}:latest"       >> "$GITHUB_OUTPUT"
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir imagen (con etiquetas OCI de trazabilidad)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: |
+            ${{ steps.vars.outputs.image }}
+            ${{ steps.vars.outputs.latest }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Escaneo de vulnerabilidades de la imagen (Trivy) - bloquea si hay CRITICAL
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/.trivyignore:/.trivyignore:ro" \
+            aquasec/trivy:latest image \
+            --ignorefile /.trivyignore \
+            --severity CRITICAL --ignore-unfixed --exit-code 1 \
+            "${{ steps.vars.outputs.image }}"
+
+      - name: Iniciar sesión en GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publicar imagen
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push "${{ steps.vars.outputs.image }}"
+          docker push "${{ steps.vars.outputs.latest }}"
+
+  # ---------------------------------------------------------------
+  # 3) Despliegue automático en EC2 (solo rama main)
+  # ---------------------------------------------------------------
+  deploy:
+    name: Despliegue en EC2
+    needs: docker
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Preparar clave SSH
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copiar docker-compose.yml a la EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" 'mkdir -p ~/propiedades'
+          scp -i ~/.ssh/ec2_key docker-compose.yml "$EC2_USER@$EC2_HOST:~/propiedades/docker-compose.yml"
+
+      - name: Desplegar nueva versión (docker compose pull + up)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          IMAGE: ${{ needs.docker.outputs.image }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" \
+            "GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' IMAGE='$IMAGE' DB_PASSWORD='$DB_PASSWORD' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd ~/propiedades
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          umask 077
+          printf 'IMAGE=%s\nDB_PASSWORD=%s\n' "$IMAGE" "$DB_PASSWORD" > .env
+          docker compose pull propiedades-svc
+          docker compose up -d --remove-orphans
+          docker image prune -f
+          docker logout ghcr.io
+          REMOTE
+
+      - name: Verificar despliegue (health check)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS "http://$EC2_HOST:8080/actuator/health" | grep -q '"status":"UP"'; then
+              echo "Servicio UP en la EC2 (imagen ${{ needs.docker.outputs.image }})"
+              exit 0
+            fi
+            echo "Esperando al servicio... ($i/20)"; sleep 10
+          done
+          echo "El servicio no respondió UP"; exit 1
