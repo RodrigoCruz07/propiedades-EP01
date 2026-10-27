@@ -90,26 +90,24 @@ jobs:
           echo "image=${IMAGE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "latest=${IMAGE}:latest"       >> "$GITHUB_OUTPUT"
 
-      - name: Configurar Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Construir imagen (con etiquetas OCI de trazabilidad)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          push: false
-          tags: |
-            ${{ steps.vars.outputs.image }}
-            ${{ steps.vars.outputs.latest }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        env:
+          IMAGE: ${{ steps.vars.outputs.image }}
+          LATEST: ${{ steps.vars.outputs.latest }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          docker build \
+            -t "$IMAGE" -t "$LATEST" \
+            --label "org.opencontainers.image.source=$SOURCE" \
+            --label "org.opencontainers.image.revision=$REVISION" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            .
 
       - name: Escaneo de vulnerabilidades de la imagen (Trivy) - bloquea si hay CRITICAL
+        env:
+          IMAGE: ${{ steps.vars.outputs.image }}
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -117,21 +115,23 @@ jobs:
             aquasec/trivy:latest image \
             --ignorefile /.trivyignore \
             --severity CRITICAL --ignore-unfixed --exit-code 1 \
-            "${{ steps.vars.outputs.image }}"
+            "$IMAGE"
 
       - name: Iniciar sesión en GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
       - name: Publicar imagen
         if: github.event_name != 'pull_request'
+        env:
+          IMAGE: ${{ steps.vars.outputs.image }}
+          LATEST: ${{ steps.vars.outputs.latest }}
         run: |
-          docker push "${{ steps.vars.outputs.image }}"
-          docker push "${{ steps.vars.outputs.latest }}"
+          docker push "$IMAGE"
+          docker push "$LATEST"
 
   # ---------------------------------------------------------------
   # 3) Despliegue automático en EC2 (solo rama main)
