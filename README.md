@@ -183,8 +183,8 @@ Además: crear el *Environment* `production` (Settings → Environments), y en `
 
 ## Uso de Inteligencia Artificial
 
-_Completar (obligatorio): indicar qué herramientas de IA se usaron y cómo (por ejemplo, apoyo para estructurar el workflow y la documentación), citándolas. Las conclusiones y reflexiones individuales se escriben sin IA._
+Se ocupo la IA para ayudar a armar el pipeline y para los errores que se produjeran en el proceso 
 
 ## Conclusiones y reflexiones individuales
 
-_Cada integrante escribe aquí su reflexión personal, sin apoyo de IA._
+En Conclusion en este trabajo hicimos un pipeline mas largo y con muchos mas pasos , que varias veces pusheaba el codigo a main y esperaba a que pasara todo en verde pero justo en una se me caia o se ponia en X porque fallo una seguridad o habia una variable mal escrita pero esto me hace mejorar y como tambien mejorar el codigo ya que los mismos errores que me salian al hacer push y que tenia una vulnerabilidad se arreglaban y se pusheaba denuevo y ese error ya no aparecia y era un alivio. Tambien aprendi nuevas tecnologias que no conocia como sonarqube y como se conectaba a un repositorio y que este mismo analizaba el codigo del repositorio y que vulnerabilidades tenia y eso me hizo reconocer que el codigo que uno escribe o ya esta siempre puede mejorar o ser mas seguro.
