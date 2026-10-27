@@ -91,7 +91,7 @@ jobs:
           echo "latest=${IMAGE}:latest"       >> "$GITHUB_OUTPUT"
 
       - name: Configurar Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Construir imagen (con etiquetas OCI de trazabilidad)
         uses: docker/build-push-action@v6
