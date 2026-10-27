@@ -110,12 +110,12 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Escaneo de vulnerabilidades de la imagen (Trivy) - bloquea si hay CRITICAL
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ steps.vars.outputs.image }}
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --severity CRITICAL --ignore-unfixed --exit-code 1 \
+            "${{ steps.vars.outputs.image }}"
 
       - name: Iniciar sesión en GHCR
         if: github.event_name != 'pull_request'
