@@ -67,12 +67,35 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
 
+  auditoria:
+    name: Auditoría de cumplimiento
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código (historial completo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Java 21 (con caché de Maven)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Poblar caché local de Maven (evita consultas a Maven Central)
+        run: mvn -B -q dependency:resolve
+
+      - name: Ejecutar auditoría (secretos y CVE críticas)
+        run: bash audit/auditoria.sh
+        
+
   # ---------------------------------------------------------------
   # 2) Imagen Docker + escaneo de vulnerabilidades + publicación (GHCR)
   # ---------------------------------------------------------------
   docker:
     name: Imagen Docker
-    needs: build-test
+    needs: [build-test, auditoria]
     runs-on: ubuntu-latest
     permissions:
       contents: read
