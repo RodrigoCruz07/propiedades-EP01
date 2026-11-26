@@ -25,6 +25,8 @@ jobs:
   build-test:
     name: Pruebas y análisis de calidad
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.cobertura.outputs.percent }}
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -50,6 +52,16 @@ jobs:
             target/site/jacoco/
             target/cucumber/
             target/surefire-reports/
+      - name: Calcular cobertura de líneas (JaCoCo)
+        id: cobertura
+        run: |
+          set -euo pipefail
+          LINE=$(grep -o '<counter type="LINE" missed="[0-9]*" covered="[0-9]*"/>' target/site/jacoco/jacoco.xml | tail -1)
+          MISSED=$(echo "$LINE" | sed -E 's/.*missed="([0-9]+)".*/\1/')
+          COVERED=$(echo "$LINE" | sed -E 's/.*covered="([0-9]+)".*/\1/')
+          PERCENT=$(awk -v m="$MISSED" -v c="$COVERED" 'BEGIN { printf "%.2f", (c * 100) / (m + c) }')
+          echo "Cobertura de líneas: ${PERCENT}%"
+          echo "percent=${PERCENT}" >> "$GITHUB_OUTPUT"
             
       # Plan gratuito: solo main permite consultar el Quality Gate.
       - name: Análisis Sonar en main (bloquea si falla el Quality Gate)
@@ -161,7 +173,7 @@ jobs:
   # ---------------------------------------------------------------
   deploy:
     name: Despliegue en EKS
-    needs: docker
+    needs: [docker, build-test]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
@@ -237,6 +249,8 @@ jobs:
           exit 1
 
       - name: Publicar tiempo de despliegue en el Pushgateway
+        env:
+          COVERAGE: ${{ needs.build-test.outputs.coverage }}
         run: |
           set -euo pipefail
           DURATION=$(( $(date +%s) - DEPLOY_START ))
@@ -248,5 +262,5 @@ jobs:
             curl -fsS http://localhost:9091/-/ready >/dev/null 2>&1 && break
             sleep 2
           done
-          printf 'deploy_duration_seconds %s\n' "$DURATION" \
+          printf 'deploy_duration_seconds %s\njacoco_line_coverage_percent %s\n' "$DURATION" "$COVERAGE" \
             | curl -fsS --data-binary @- http://localhost:9091/metrics/job/pipeline/servicio/propiedades-svc
