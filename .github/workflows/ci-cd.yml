@@ -218,13 +218,16 @@ jobs:
           kubectl -n monitoring rollout status deployment/pushgateway --timeout=300s
           kubectl -n monitoring rollout status deployment/grafana --timeout=300s
 
-      - name: Verificar despliegue (health check por el balanceador)
+
+      - name: Verificar despliegue (health check por port-forward)
         run: |
           set -euo pipefail
+          kubectl -n propiedades port-forward svc/propiedades-svc 8080:80 >/tmp/pf-app.log 2>&1 &
+          PF_PID=$!
+          trap 'kill $PF_PID 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do
-            HOST=$(kubectl -n propiedades get svc propiedades-svc -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-            if [ -n "$HOST" ] && curl -fsS "http://$HOST/actuator/health" | grep -q '"status":"UP"'; then
-              echo "Servicio UP en http://$HOST"
+            if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "Servicio UP (verificado por port-forward)"
               exit 0
             fi
             echo "Esperando al servicio... ($i/30)"; sleep 10
